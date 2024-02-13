@@ -17,3 +17,6 @@ if __name__ == "__main__":
 
     # Compile the model
     model.compile(optimizer="sgd", loss="mean_squared_error")
+
+    # Print the model summary
+    model.summary()
