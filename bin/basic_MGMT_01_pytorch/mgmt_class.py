@@ -5,6 +5,8 @@ import torch.optim as optim
 from torch import flatten
 import numpy as np
 import pandas as pd
+from torch.utils.data import DataLoader, Dataset
+from torchio import ScalarImage
 
 
 class MGMTModel(nn.Module):
@@ -33,7 +35,32 @@ class MGMTModel(nn.Module):
         x = self.fc3(x)
         return x
 
+class MGMTDataset(Dataset):
+    """
+    The PyTorch dataset for MGMT classification.
+    """
+    def __init__(self, df, transform=None):
+        self.df = df
+        self.transform = transform
 
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        image = ScalarImage(self.df.iloc[idx]["T1"])
+        label = self.df.iloc[idx]["MGMT"]
+        return image, label
+    
+
+def read_data(data_path):
+    """
+    Load the data from a csv file.
+    """
+    data = pd.read_csv(data_path)
+    msk = np.random.rand(len(data)) < 0.8
+    train = data[msk]
+    test = data[~msk]
+    return train, test
 
 if __name__ == "__main__":
     """
@@ -41,11 +68,25 @@ if __name__ == "__main__":
     """
     # Image size is 240x240
     # Load the data
-    data = pd.read_csv("data/brats_2021.csv")
-    msk = np.random.rand(len(data)) < 0.8
-    train = data[msk]
-    test = data[~msk]
-    print(data.head())
-    print(train.head())
-    print(test.head())
-    print(len(train), len(test))
+    data_path = "data/brats_2021.csv"
+    train, test = read_data(data_path)
+    train_dataset = MGMTDataset(train)
+    test_dataset = MGMTDataset(test)
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=0)
+    test_loader = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=0)
+
+    # Create the model
+    net = MGMTModel()
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+
+    # Train the model
+    for epoch in range(2):  # loop over the dataset multiple times
+        for i, data in enumerate(train_loader):
+            # get the inputs; data is a list of [inputs, labels]
+            inputs, labels = data
+            optimizer.zero_grad()
+            outputs = net(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
