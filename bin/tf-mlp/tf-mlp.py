@@ -1,7 +1,14 @@
 import tensorflow as tf
+import numpy as np
 
 def custom_mse_loss(y_true, y_pred):
-    return tf.math.reduce_mean(tf.math.square(y_true - y_pred)
+    return tf.math.reduce_mean(tf.math.square(y_true - y_pred))
+
+def custom_dice_loss(y_true, y_pred):
+    """Calculate the DICE loss between y_true and y_pred."""
+    intersection = np.sum(y_true * y_pred)
+    dice = 2*np.sum(intersection)/(np.sum(y_true) + np.sum(y_pred))
+    return 1-dice
 
 if __name__ == "__main__":
     """ 
@@ -22,7 +29,7 @@ if __name__ == "__main__":
     ])
 
     # Compile the model
-    model.compile(optimizer="sgd", loss=custom_mse_loss)
+    model.compile(optimizer="sgd", loss=custom_dice_loss)
 
     # Print the model summary
     model.summary()

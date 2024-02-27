@@ -35,7 +35,7 @@ class MGMTModel(nn.Module):
         x = self.pool(x)
 
         x = flatten(x, 1)
-        
+
         x = self.fc1(x)
         x = self.fc2(x)
         x = self.fc3(x)
@@ -70,7 +70,14 @@ def read_data(data_path):
     return train, test
 
 def custom_mse_loss(y_true, y_pred):
+    """Calculate the mean square error between y_true and y_pred."""
     return torch.mean(torch.square(y_true - y_pred))
+
+def custom_dice_loss(y_true, y_pred):
+    """Calculate the DICE loss between y_true and y_pred."""
+    intersection = np.sum(y_true * y_pred)
+    dice = 2*np.sum(intersection)/(np.sum(y_true) + np.sum(y_pred))
+    return 1-dice
 
 if __name__ == "__main__":
     """
@@ -98,6 +105,6 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             outputs = net(inputs)
             # loss = criterion(outputs, labels)
-            loss = custom_mse_loss(outputs, labels)
+            loss = custom_dice_loss(outputs, labels)
             loss.backward()
             optimizer.step()
