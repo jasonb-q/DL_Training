@@ -25,14 +25,21 @@ class MGMTModel(nn.Module):
         self.fc1 = nn.Linear(16 * 120 * 120, 128)
         self.fc2 = nn.Linear(128, 32)
         self.fc3 = nn.Linear(32, 10) # output layer
+        self.sm = nn.Softmax()
 
     def forward(self, x):
-        x = self.pool(F.softmax(self.conv1(x)))
-        x = self.pool(F.softmax(self.conv2(x)))
-        x = flatten(x, 1) # flatten all dimensions except batch
-        x = F.softmax(self.fc1(x))
-        x = F.softmax(self.fc2(x))
+        x = self.conv1(x)
+        x = self.pool(x)
+
+        x = self.conv2(x)
+        x = self.pool(x)
+
+        x = flatten(x, 1)
+        
+        x = self.fc1(x)
+        x = self.fc2(x)
         x = self.fc3(x)
+        x = self.sm(x)
         return x
 
 class MGMTDataset(Dataset):
@@ -62,6 +69,9 @@ def read_data(data_path):
     test = data[~msk]
     return train, test
 
+def custom_mse_loss(y_true, y_pred):
+    return torch.mean(torch.square(y_true - y_pred))
+
 if __name__ == "__main__":
     """
     Basic model for potential use in MGMT classification. This is for learning purposes.
@@ -77,7 +87,7 @@ if __name__ == "__main__":
 
     # Create the model
     net = MGMTModel()
-    criterion = nn.CrossEntropyLoss()
+    # criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
     # Train the model
@@ -87,6 +97,7 @@ if __name__ == "__main__":
             inputs, labels = data
             optimizer.zero_grad()
             outputs = net(inputs)
-            loss = criterion(outputs, labels)
+            # loss = criterion(outputs, labels)
+            loss = custom_mse_loss(outputs, labels)
             loss.backward()
             optimizer.step()

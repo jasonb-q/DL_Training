@@ -1,5 +1,8 @@
 import tensorflow as tf
 
+def custom_mse_loss(y_true, y_pred):
+    return tf.math.reduce_mean(tf.math.square(y_true - y_pred)
+
 if __name__ == "__main__":
     """ 
         For learning purposes I am to write a multi layer perceptron using TensorFlow.
@@ -19,7 +22,7 @@ if __name__ == "__main__":
     ])
 
     # Compile the model
-    model.compile(optimizer="sgd", loss="mean_squared_error")
+    model.compile(optimizer="sgd", loss=custom_mse_loss)
 
     # Print the model summary
     model.summary()
