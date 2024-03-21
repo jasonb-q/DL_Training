@@ -9,7 +9,11 @@ from torch.utils.data import DataLoader, Dataset
 from torchio import ScalarImage
 from typing import Tuple, List, NoReturn
 from torchvision.transforms import CenterCrop
+from utils import load_settings
+import sys
 
+settings = load_settings(sys.argv[1])
+print(settings["dimension"])
 
 class Block(nn.Module):
     """
@@ -34,8 +38,9 @@ class Encoder(nn.Module):
     """
     The PyTorch encoder for JUNet classification.
     """
-    def __init__(self, channels: Tuple[int] = (3, 16, 32, 64)):
+    def __init__(self, channels: tuplechannels: tuple):
         super(Encoder, self).__init__()
+
         # convolutions
         self.enc_blocks = nn.ModuleList(
             [Block(channels[i], channels[i+1]) for i in range(len(channels) - 1)]
@@ -62,7 +67,7 @@ class Decoder(nn.Module):
     """
     The PyTorch decoder for JUNet classification.
     """
-    def __init__(self, channels: Tuple[int] = (64, 32, 16)):
+    def __init__(self, channels: Tuple[int]):
         super(Decoder, self).__init__()
         self.channels = channels
 
@@ -77,15 +82,9 @@ class Decoder(nn.Module):
     def forward(self, x, enc_features):
         for i in range(len(self.channels) - 1):
             x = self.upconvs[i](x)
-            enc_feat = self.crop(enc_features[i], x)
             x = torch.cat([x, enc_feat], dim=1)
             x = self.dec_blocks[i](x)
         return x
-    
-    def crop(self, enc_feat, x):
-        _, _, H, W = x.shape
-        enc_feat = CenterCrop([H, W])(enc_feat)
-        return enc_feat
     
 
 class UNet(nn.Module):
@@ -100,15 +99,15 @@ class UNet(nn.Module):
         The second conv layer will have 16 input channels and 32 output channels.
         The third conv layer will have 32 input channels and 64 output channels.
         """
-        self.enc_channels = (3, 16, 32, 64)
-        self.dec_channels = (64, 32, 16) # then upconv will go from 16 to 32 to 64
-        self.retain_dim = True
-        self.num_classes = 1 # The number of classes to classify
-        self.out_size = (128, 128)  # if retain_dim is True, then the output size will be 128x128 using interpolation
+        self.enc_channels: Tuple[int] = tuple(settings["channels"]) # 16, 32, 64, 128, 256 
+        self.dec_channels: Tuple[int] = self.enc_channels[::-1] # 256, 128, 64, 32, 16 
+        self.retain_dim: bool = settings["retain_dim"]
+        self.num_classes: int = settings["num_classes"] # The number of classes to classify
+        self.out_size: Tuple[int] = tuple(settings["dimension"])  # if retain_dim is True, then the output size will be 128x128 using interpolation
 
         # The encoder and decoder for the UNet model. 
-        self.encoder = Encoder()
-        self.decoder = Decoder()
+        self.encoder = Encoder(self.enc_channels)
+        self.decoder = Decoder(self.dec_channels)
         
         self.head = nn.Conv2d(self.dec_channels[-1], self.num_classes, 1)
 
@@ -126,5 +125,20 @@ class UNet(nn.Module):
             map = F.interpolate(map, self.out_size)
         return map
     
+
+
+
 if __name__ == "__main__":
     """UNet model using torch for classifying brain images in some way."""
+    net = UNet()
+    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+
+    # Train the model
+    for epoch in range(2):  # loop over the dataset multiple times
+        for i, data in enumerate(train_loader):
+            # get the inputs; data is a list of [inputs, labels]
+            inputs, labels = data
+            optimizer.zero_grad()
+            outputs = net(inputs)
+            loss.backward()
+            optimizer.step()
