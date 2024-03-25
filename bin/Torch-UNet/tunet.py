@@ -29,8 +29,7 @@ class Block(nn.Module):
         x = self.conv1(x)
         x = self.relu(x)
         x = self.conv2(x)
-        # why not use ReLU here?
-        # because we are going from output_channels to output_channels after using ReLU so there shouldn't be any negative values?
+        x = self.relu(x)
         return x
 
 
@@ -82,7 +81,9 @@ class Decoder(nn.Module):
     def forward(self, x, enc_features):
         for i in range(len(self.channels) - 1):
             x = self.upconvs[i](x)
-            x = torch.cat([x, enc_feat], dim=1)
+            if x[:-1] != enc_features[:-1]:
+                raise Exception("enc_features dimension != x dimension")
+            x = torch.cat([x, enc_features[i]], dim=1)
             x = self.dec_blocks[i](x)
         return x
     
