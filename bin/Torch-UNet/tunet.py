@@ -50,13 +50,6 @@ class Encoder(nn.Module):
         block_outputs = []
         for block in self.enc_blocks:
             x = block(x) # perform the convolutions and ReLU
-            """Why do they append the output of the block to block_outputs before pooling? 
-            The only reason I can see is that they want to keep the output of the block before pooling and the output of pooling
-            is used somewhere else somehow.
-
-            They are re-assigning x so I don't think x is being updated in the list(I could be wrong though).
-            from my perspective the pooling part isn't being used.
-            """
             block_outputs.append(x)
             x = self.pool(x)
         return block_outputs
@@ -94,12 +87,6 @@ class UNet(nn.Module):
     """
     def __init__(self):
         super(UNet, self).__init__()
-        """
-        The encoding channels for the UNet model. 
-        So the first conv layer will have 3 input channels and 16 output channels.
-        The second conv layer will have 16 input channels and 32 output channels.
-        The third conv layer will have 32 input channels and 64 output channels.
-        """
         self.enc_channels: Tuple[int] = tuple(settings["channels"]) # 16, 32, 64, 128, 256 
         self.dec_channels: Tuple[int] = self.enc_channels[::-1] # 256, 128, 64, 32, 16 
         self.retain_dim: bool = settings["retain_dim"]
@@ -118,7 +105,7 @@ class UNet(nn.Module):
         enc_features = self.encoder(x)
 
         # decode
-        decode_features = self.decoder(enc_features[::-1][0], enc_features[::-1][1:]) # confused here
+        decode_features = self.decoder(enc_features[::-1][0], enc_features[::-1][1:]) 
 
         map = self.head(decode_features)
 
