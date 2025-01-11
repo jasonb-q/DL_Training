@@ -1,21 +1,25 @@
+import os
 import torch
+import yaml
 import numpy
-from tensorflow.keras.datasets import mnist
+# from tensorflow.keras.datasets import mnist
 import matplotlib.pyplot as plt
 import numpy as np
 import torch.nn as nn
 from torchvision import models, datasets
 from torchvision.transforms import ToTensor
 from torch.nn.functional import relu
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split, Dataset
+from torchvision.io import read_image
 
 class UNet(nn.Module):
     def __init__(self, n_classes):
         super().__init__()
-        self.encoder = Encoder(1)
-        self.conv1 = nn.Conv2d(112, 224, kernel_size=3, padding=1) 
-        self.conv2 = nn.Conv2d(224, 224, kernel_size=3, padding=1) 
-        self.decoder = Decoder()
+        self.channels = [64, 128, 256, 512, 1024]
+        self.encoder = Encoder(3, self.channels[:-1])
+        self.conv1 = nn.Conv2d(self.channels[-1-1], self.channels[-1], kernel_size=3, padding=1) 
+        self.conv2 = nn.Conv2d(self.channels[-1], self.channels[-1], kernel_size=3, padding=1) 
+        self.decoder = Decoder(self.channels[:-1][::-1])
         self.conv_out = nn.Conv2d(56, n_classes, kernel_size=1)
 
     def forward(self, x):
@@ -28,40 +32,36 @@ class UNet(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, n_feat):
+    def __init__(self, n_feat, channels):
         super().__init__()
-        self.c1 = ConvBlock(n_feat, 56) # 64
-        self.c2 = ConvBlock(56, 112) #128
-        # self.c3 = ConvBlock(128, 256)
-        # self.c4 = ConvBlock(256, 512)
+        self.channels = channels
+        self.conv_blocks = nn.ModuleList()
+        self.c_in = ConvBlock(n_feat, self.channels[0])
+        for i in range(1, len(channels)):
+            self.conv_blocks.append(ConvBlock(channels[i-1], channels[i]))
     
     def forward(self, x):
         skips = []
-        v, out1 = self.c1(x)
-        v, out2 = self.c2(v)
-        # v, out3 = self.c3(v)
-        # v, out4 = self.c4(v)
-        
-        # skips.append(out4)
-        # skips.append(out3)
-        skips.append(out2)
-        skips.append(out1)
+        v, skip = self.c_in(x)
+        skips.append(skip)
+        for conv in self.conv_blocks:
+            v, skip = conv(v)
+            skips.append(skip)
 
+        skips = skips[::-1]
         return v, skips
 
 
 class Decoder(nn.Module):
-    def __init__(self):
+    def __init__(self, channels):
         super().__init__()
-        features = 224
+        self.channels = channels
         self.up_convs = nn.ModuleList()
-        for i in range(2):
-            out = int(features/2)
-            self.up_convs.append(UpConvBlock(features, out))
-            features = out
+        for i in range(1, len(self.channels)):
+            self.up_convs.append(UpConvBlock(self.channels[i-1], self.channels[i]))
 
     def forward(self, x, skips):
-        for i in range(2):
+        for i in len(self.channels):
             x = self.up_convs[i](x, skips[i])
         return x
 
@@ -95,24 +95,57 @@ class UpConvBlock(nn.Module):
         val = relu(self.conv2(val))
         return val
 
+class CatDataset(Dataset):
+    def __init__(self, img_dir, mask_dir, transform=None, target_transform=None):
+        self.mask_dir = mask_dir
+        self.img_dir = img_dir
+        self.fnames = os.listdir(self.mask_dir)[:1000]
+        self.transform = transform
+        self.target_transform = target_transform
+
+    def __len__(self):
+        return len(self.fnames)
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.img_dir, self.fnames[idx])
+        image = read_image(img_path)
+        mask_path = os.path.join(self.mask_dir, self.fnames[idx])
+        mask = read_image(mask_path)
+        mask[mask > 0] = 1
+        if self.transform:
+            image = self.transform(image)
+        if self.target_transform:
+            label = self.target_transform(label)
+        return image, mask
+
+def get_data():
+    with open("info.yaml", "r") as file:
+        data = yaml.safe_load(file)
+    img_p = data["img_path"]
+    mask_p = data["mask_path"]
+    dataset = CatDataset(img_p, mask_p)
+    return dataset
+
 if __name__ == "__main__":
-    # Load the MNIST dataset
-    train_data = datasets.MNIST(
-        root="data",
-        train=True,
-        download=True,
-        transform=ToTensor()
-    )
+    data = get_data()
+    train_count = int(0.8 * len(data))
+    valid_count = len(data) - train_count
+    # Randomly split the dataset
+    train_dataset, val_dataset = random_split(data, [train_count, valid_count])
 
-    val_data = datasets.MNIST(
-        root="data",
-        train=False,
-        download=True,
-        transform=ToTensor()
-    )
-
-    train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
-    val_loader = DataLoader(val_data, batch_size=1, shuffle=False)
+    print(len(train_dataset))
+    print(len(val_dataset))
+    # (Optional) Create DataLoaders for batching
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=1)
+    # img, mask = data[0]
+    
+    # show mask
+    # mask = img.numpy()
+    # mask = mask.transpose(1,2,0)
+    # print(mask.shape)
+    # plt.imshow(mask)
+    # plt.show()
 
     model = UNet(1)
     criterion = nn.BCEWithLogitsLoss()

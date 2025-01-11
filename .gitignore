@@ -1,2 +1,4 @@
 *.csv
+*.yaml
+*.json
 ConvNets/UNet/data
